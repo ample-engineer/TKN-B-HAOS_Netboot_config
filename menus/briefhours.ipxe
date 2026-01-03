@@ -61,17 +61,24 @@ echo
 echo Loading Ubuntu 24.04 installer...
 echo
 
-# Use Ubuntu 24.04 netboot with autoinstall
+# Try local cached assets first (much faster)
+# Pull assets via netboot.xyz Web UI: Assets > Pull OS > Ubuntu > 24.04
+isset ${use_local_cache} && iseq ${use_local_cache} 1 && goto try_local_assets ||
+
+:use_remote_assets
+echo Using remote Ubuntu assets...
 set base_url http://archive.ubuntu.com/ubuntu/dists/noble/main/installer-amd64/current/legacy-images/netboot/ubuntu-installer/amd64
+kernel ${base_url}/linux || goto failed
+initrd ${base_url}/initrd.gz || goto failed
+goto do_boot
 
-# For local assets (faster):
-# kernel ${local_assets}/ubuntu-netboot-24.04-amd64/vmlinuz
-# initrd ${local_assets}/ubuntu-netboot-24.04-amd64/initrd
+:try_local_assets
+echo Trying local cached assets...
+kernel ${ubuntu_kernel} || goto use_remote_assets
+initrd ${ubuntu_initrd} || goto use_remote_assets
+echo Using local cached assets (faster)
 
-# Using Ubuntu archive (more reliable)
-kernel ${base_url}/linux
-initrd ${base_url}/initrd.gz
-
+:do_boot
 # Autoinstall with role-specific cloud-init
 imgargs linux auto=true priority=critical \
     url=${provision_server}/briefhours/autoinstall.yaml \

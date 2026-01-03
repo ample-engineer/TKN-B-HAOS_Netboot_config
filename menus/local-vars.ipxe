@@ -48,3 +48,15 @@ set ubuntu_initrd ${local_assets}/ubuntu-netboot-24.04-amd64/initrd
 # ===== Remote Fallback =====
 # Used when local assets not available
 set remote_boot https://boot.netboot.xyz
+
+# ===== VLAN-Based Auto-Routing =====
+# Route clients to auto-provisioning based on subnet
+# VLAN 11 (10.0.11.x) -> Zero-touch K3s provisioning
+# Skip if already handled (prevents loop)
+isset ${vlan_routed} && goto :eof ||
+set vlan_routed 1
+
+# VLAN 11: K3s Nodes - Zero-touch auto-provision
+iseq ${net0/ip:ipv4} 10.0.11.* && chain --autofree k3s-auto.ipxe ||
+
+# All other VLANs continue to normal menu

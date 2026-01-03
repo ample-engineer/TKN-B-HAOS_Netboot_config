@@ -1,0 +1,39 @@
+#!ipxe
+#
+# TKN-B Network Boot Entry Point
+# Routes clients based on VLAN/subnet
+#
+
+# Load local variables
+chain --autofree local-vars.ipxe ||
+
+echo
+echo TKN-B Network Boot
+echo IP: ${net0/ip}
+echo
+
+# Check if client is on VLAN 11 (K3s auto-provision subnet)
+# 10.0.11.x -> auto-provision as K3s node
+iseq ${net0/ip:ipv4} 10.0.11.* && goto k3s_auto ||
+
+# Check if client is on VLAN 4 (BriefHours subnet)
+# 10.0.4.x -> show BriefHours menu
+iseq ${net0/ip:ipv4} 10.0.4.* && goto briefhours ||
+
+# Default: show custom menu
+goto custom_menu
+
+:k3s_auto
+echo Detected VLAN 11 (K3s Nodes) - Starting auto-provision...
+chain --autofree k3s-auto.ipxe || goto custom_menu
+
+:briefhours
+echo Detected VLAN 4 (BriefHours) - Loading cluster menu...
+chain --autofree briefhours.ipxe || goto custom_menu
+
+:custom_menu
+chain --autofree custom.ipxe || goto shell
+
+:shell
+echo Falling back to iPXE shell...
+shell

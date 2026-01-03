@@ -1,0 +1,165 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_GB.UTF-8
+  keyboard:
+    layout: gb
+
+  # Network: DHCP initially, static configured post-install via cloud-init
+  network:
+    version: 2
+    ethernets:
+      id0:
+        match:
+          driver: "*"
+        dhcp4: true
+        dhcp6: false
+
+  # Disk Configuration - Two disk setup
+  # Disk 1: OS (sda or nvme0n1)
+  # Disk 2: PostgreSQL data (sdb or nvme1n1)
+  storage:
+    config:
+      # ===== Disk 1: Operating System =====
+      - id: disk0
+        type: disk
+        ptable: gpt
+        path: /dev/sda
+        wipe: superblock-recursive
+        grub_device: true
+
+      # EFI partition (512MB)
+      - id: disk0-part1
+        type: partition
+        device: disk0
+        size: 512M
+        flag: boot
+        grub_device: true
+
+      # Boot partition (1GB)
+      - id: disk0-part2
+        type: partition
+        device: disk0
+        size: 1G
+
+      # Root partition (rest of disk)
+      - id: disk0-part3
+        type: partition
+        device: disk0
+        size: -1
+
+      # Filesystems for disk 1
+      - id: disk0-part1-format
+        type: format
+        volume: disk0-part1
+        fstype: fat32
+
+      - id: disk0-part2-format
+        type: format
+        volume: disk0-part2
+        fstype: ext4
+
+      - id: disk0-part3-format
+        type: format
+        volume: disk0-part3
+        fstype: ext4
+
+      # Mounts for disk 1
+      - id: disk0-part1-mount
+        type: mount
+        device: disk0-part1-format
+        path: /boot/efi
+
+      - id: disk0-part2-mount
+        type: mount
+        device: disk0-part2-format
+        path: /boot
+
+      - id: disk0-part3-mount
+        type: mount
+        device: disk0-part3-format
+        path: /
+
+      # ===== Disk 2: PostgreSQL Data =====
+      - id: disk1
+        type: disk
+        ptable: gpt
+        path: /dev/sdb
+        wipe: superblock-recursive
+
+      - id: disk1-part1
+        type: partition
+        device: disk1
+        size: -1
+
+      # XFS for PostgreSQL - better write performance
+      - id: disk1-part1-format
+        type: format
+        volume: disk1-part1
+        fstype: xfs
+
+      - id: disk1-part1-mount
+        type: mount
+        device: disk1-part1-format
+        path: /var/lib/postgresql
+
+  # User Configuration
+  identity:
+    hostname: briefhours-node
+    username: deploy
+    # Password: 'briefhours2024' - generate new with: mkpasswd -m sha-512
+    password: "$6$rounds=4096$BriefHoursSalt$kPvGH.9ZgYJ6K5XB8HqLm8BFq.rGxN3vK2YXwE4Qm7NzL1T5dR9sM2uI0oP3aW6yC8xV4bN1mJ7kF5hD0gS9/"
+
+  # SSH Configuration
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      # Add your SSH public key(s) here
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC5Xfj+dptG0bXa4j00bY3xKZov853FSUkGwwHfVj953 sbarker@Mac.internal.thomker.net"
+
+  # Packages to install
+  packages:
+    - docker.io
+    - docker-compose-plugin
+    - curl
+    - wget
+    - jq
+    - htop
+    - iotop
+    - net-tools
+    - ufw
+    - fail2ban
+    - xfsprogs
+    - git
+
+  # Updates
+  updates: security
+
+  # Late commands run in chroot after install
+  late-commands:
+    # Enable Docker
+    - curtin in-target --target=/target -- systemctl enable docker
+
+    # Add deploy user to docker group
+    - curtin in-target --target=/target -- usermod -aG docker deploy
+
+    # Set correct permissions on PostgreSQL data directory
+    - curtin in-target --target=/target -- mkdir -p /var/lib/postgresql/data
+    - curtin in-target --target=/target -- chown -R 999:999 /var/lib/postgresql
+
+    # Create briefhours directories
+    - curtin in-target --target=/target -- mkdir -p /etc/briefhours
+    - curtin in-target --target=/target -- mkdir -p /opt/briefhours
+    - curtin in-target --target=/target -- mkdir -p /var/lib/briefhours
+    - curtin in-target --target=/target -- mkdir -p /var/log/briefhours
+    - curtin in-target --target=/target -- chown deploy:deploy /opt/briefhours
+
+    # Enable UFW
+    - curtin in-target --target=/target -- ufw default deny incoming
+    - curtin in-target --target=/target -- ufw default allow outgoing
+    - curtin in-target --target=/target -- ufw allow ssh
+    - curtin in-target --target=/target -- ufw --force enable
+
+  # Reboot after install
+  shutdown: reboot

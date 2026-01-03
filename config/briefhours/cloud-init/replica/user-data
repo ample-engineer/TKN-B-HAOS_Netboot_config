@@ -1,0 +1,122 @@
+#cloud-config
+#
+# BriefHours Replica Node Configuration
+# PostgreSQL Replica + etcd
+#
+
+hostname: briefhours-node-2
+
+preserve_hostname: true
+
+write_files:
+  # Node configuration
+  - path: /etc/briefhours/node.conf
+    content: |
+      # BriefHours Node Configuration
+      NODE_ROLE=replica
+      NODE_NUMBER=2
+      NODE_HOSTNAME=briefhours-node-2
+      NODE_IP=10.0.4.102
+
+      # Cluster nodes
+      PRIMARY_IP=10.0.4.101
+      REPLICA_IP=10.0.4.102
+      WITNESS_IP=10.0.4.105
+      CLUSTER_NODES=10.0.4.101,10.0.4.102,10.0.4.105
+
+      # etcd configuration
+      ETCD_NAME=node2
+      ETCD_INITIAL_CLUSTER=node1=http://10.0.4.101:2380,node2=http://10.0.4.102:2380,witness=http://10.0.4.105:2380
+      ETCD_INITIAL_CLUSTER_STATE=existing
+
+      # PostgreSQL
+      POSTGRES_DATA_DIR=/var/lib/postgresql/data
+      IS_WITNESS=false
+      PRIMARY_NODE=10.0.4.101
+
+      # Patroni
+      PATRONI_SCOPE=briefhours
+      PATRONI_NAME=node2
+    permissions: '0600'
+    owner: root:root
+
+  # Static network configuration
+  - path: /etc/netplan/01-static.yaml
+    content: |
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            addresses:
+              - 10.0.4.102/24
+            routes:
+              - to: default
+                via: 10.0.0.1
+            nameservers:
+              addresses:
+                - 10.0.0.1
+                - 1.1.1.1
+    permissions: '0600'
+    owner: root:root
+
+  # Cluster join service
+  - path: /etc/systemd/system/cluster-join.service
+    content: |
+      [Unit]
+      Description=Join BriefHours Cluster
+      After=network-online.target docker.service
+      Wants=network-online.target
+      ConditionPathExists=!/var/lib/briefhours/.joined
+
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/briefhours/scripts/cluster-join.sh
+      ExecStartPost=/usr/bin/touch /var/lib/briefhours/.joined
+      RemainAfterExit=yes
+      TimeoutStartSec=600
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+    owner: root:root
+
+  # Docker daemon config
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        },
+        "storage-driver": "overlay2"
+      }
+    permissions: '0644'
+    owner: root:root
+
+runcmd:
+  # Apply static network config
+  - netplan apply
+
+  # Configure firewall for cluster
+  - ufw allow from 10.0.4.0/24 to any port 2379 comment 'etcd client'
+  - ufw allow from 10.0.4.0/24 to any port 2380 comment 'etcd peer'
+  - ufw allow from 10.0.4.0/24 to any port 5432 comment 'PostgreSQL'
+  - ufw allow from 10.0.4.0/24 to any port 8008 comment 'Patroni REST'
+  - ufw allow from 10.0.4.0/24 to any port 5000 comment 'HAProxy stats'
+  - ufw allow from 10.0.0.0/22 to any port 80 comment 'HTTP'
+  - ufw allow from 10.0.0.0/22 to any port 443 comment 'HTTPS'
+  - ufw reload
+
+  # Wait for Docker to be ready
+  - systemctl start docker
+  - sleep 5
+
+  # Enable cluster join service
+  - systemctl daemon-reload
+  - systemctl enable cluster-join.service
+
+  # Log completion
+  - echo "Replica node cloud-init complete at $(date)" >> /var/log/briefhours/cloud-init.log
+
+final_message: "BriefHours REPLICA node cloud-init completed in $UPTIME seconds"

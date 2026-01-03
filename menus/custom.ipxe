@@ -1,103 +1,188 @@
 #!ipxe
 #
 # TKN-B Custom Boot Menu
+# Curated selection of boot options
 #
 
 # Load local variables
-chain --autofree menus/local-vars.ipxe ||
+chain --autofree local-vars.ipxe ||
 
 :custom_menu
 clear menu
 set space:hex 20:20
 set space ${space:string}
-menu ${site_name} Custom Boot Menu
-item --gap --             ------------------------- Local Options --------------------------
-item --key l local_linux  ${space} (L)ocal Linux Images
-item --key k k3s_provision ${space} (K)3s Node Provisioning
-item --key w local_win    ${space} (W)indows PE / Recovery
-item --gap --             ------------------------- Utilities -----------------------------
-item --key m memtest      ${space} (M)emtest86+
-item --key d disktools    ${space} (D)isk Tools (GParted, Clonezilla)
-item --gap --             ----------------------------------------------------------------
-item --key b back         ${space} (B)ack to netboot.xyz main menu
-item --key x exit_menu    ${space} E(x)it to local boot
 
-choose --timeout ${menu_timeout}000 --default local_linux selected || goto custom_menu
+menu ${site_name} Network Boot Menu
+item --gap --             -------- Cluster Provisioning --------
+item --key b briefhours   ${space} (B)riefHours PostgreSQL Cluster
+item --key k k3s          ${space} (K)3s Kubernetes Cluster
+item --gap --             -------- Operating Systems --------
+item --key u ubuntu       ${space} (U)buntu (Desktop & Server)
+item --key w windows      ${space} (W)indows
+item --key r rhel         ${space} (R)HEL / Rocky / Alma
+item --key a arch         ${space} (A)rch Linux
+item --key m mint         ${space} Linux (M)int
+item --key l kali         ${space} Ka(l)i Linux
+item --key v vmware       ${space} (V)Mware ESXi
+item --gap --             -------- Recovery & Utilities --------
+item --key s systemrescue ${space} (S)ystemRescue
+item --key z rescuezilla  ${space} Rescuezilla
+item --key g gparted      ${space} (G)Parted
+item --key c clonezilla   ${space} (C)lonezilla
+item --key i wimboot      ${space} W(i)mboot / WinPE Utils
+item --gap --             --------
+item --key x exit         ${space} E(x)it to local boot
+
+choose --timeout 60000 --default ubuntu selected || goto custom_menu
 goto ${selected}
 
-:local_linux
-menu ${site_name} Local Linux Images
-item ubuntu_live          Ubuntu 24.04 LTS Live
-item debian_live          Debian 12 Live
-item systemrescue         SystemRescue
-item --key b back_custom  Back to custom menu
-choose selected || goto local_linux
-goto ${selected}
+# ===== Cluster Provisioning =====
 
-:ubuntu_live
-echo Booting Ubuntu 24.04 Live...
-chain --autofree https://boot.netboot.xyz/ipxe/ubuntu.ipxe ||
-goto local_linux
-
-:debian_live
-echo Booting Debian 12 Live...
-chain --autofree https://boot.netboot.xyz/ipxe/debian.ipxe ||
-goto local_linux
-
-:systemrescue
-echo Booting SystemRescue...
-chain --autofree https://boot.netboot.xyz/ipxe/systemrescue.ipxe ||
-goto local_linux
-
-:back_custom
+:briefhours
+echo Loading BriefHours Cluster Provisioning...
+chain --autofree briefhours.ipxe ||
 goto custom_menu
 
-:k3s_provision
-echo Loading K3s Node Provisioning Menu...
+:k3s
+echo Loading K3s Node Provisioning...
 chain --autofree k3s-provision.ipxe ||
 goto custom_menu
 
-:local_win
-iseq ${enable_windows_pe} 1 || goto win_disabled
-menu ${site_name} Windows PE / Recovery
-item winpe                Windows PE (local)
-item --key b back_custom  Back to custom menu
-choose selected || goto local_win
+# ===== Ubuntu =====
+
+:ubuntu
+menu ${site_name} Ubuntu
+item ubuntu_server        Ubuntu Server 24.04 LTS (Netboot)
+item ubuntu_desktop       Ubuntu Desktop 24.04 LTS (Live)
+item ubuntu_server_22     Ubuntu Server 22.04 LTS (Netboot)
+item --key b back         Back to main menu
+choose selected || goto ubuntu
 goto ${selected}
 
-:winpe
-echo Windows PE not yet configured
-prompt Press any key to return...
-goto local_win
+:ubuntu_server
+chain --autofree https://boot.netboot.xyz/ipxe/ubuntu.ipxe ||
+goto ubuntu
 
-:win_disabled
-echo Windows PE is disabled in local-vars.ipxe
-prompt Press any key to continue...
+:ubuntu_desktop
+chain --autofree https://boot.netboot.xyz/ipxe/live-ubuntu.ipxe ||
+goto ubuntu
+
+:ubuntu_server_22
+set ubuntu_version jammy
+chain --autofree https://boot.netboot.xyz/ipxe/ubuntu.ipxe ||
+goto ubuntu
+
+# ===== Windows =====
+
+:windows
+chain --autofree https://boot.netboot.xyz/ipxe/windows.ipxe ||
 goto custom_menu
 
-:memtest
-chain --autofree https://boot.netboot.xyz/ipxe/memtest.ipxe ||
-goto custom_menu
+# ===== RHEL Family =====
 
-:disktools
-menu Disk Tools
-item gparted              GParted Live
-item clonezilla           Clonezilla Live
-item --key b back_custom  Back to custom menu
-choose selected || goto disktools
+:rhel
+menu ${site_name} RHEL / Enterprise Linux
+item rhel_main            Red Hat Enterprise Linux
+item rocky                Rocky Linux
+item alma                 AlmaLinux
+item oracle               Oracle Linux
+item --key b back         Back to main menu
+choose selected || goto rhel
 goto ${selected}
+
+:rhel_main
+chain --autofree https://boot.netboot.xyz/ipxe/rhel.ipxe ||
+goto rhel
+
+:rocky
+chain --autofree https://boot.netboot.xyz/ipxe/rockylinux.ipxe ||
+goto rhel
+
+:alma
+chain --autofree https://boot.netboot.xyz/ipxe/almalinux.ipxe ||
+goto rhel
+
+:oracle
+chain --autofree https://boot.netboot.xyz/ipxe/oracle.ipxe ||
+goto rhel
+
+# ===== Arch =====
+
+:arch
+chain --autofree https://boot.netboot.xyz/ipxe/archlinux.ipxe ||
+goto custom_menu
+
+# ===== Mint =====
+
+:mint
+chain --autofree https://boot.netboot.xyz/ipxe/live-mint.ipxe ||
+goto custom_menu
+
+# ===== Kali =====
+
+:kali
+chain --autofree https://boot.netboot.xyz/ipxe/kali.ipxe ||
+goto custom_menu
+
+# ===== VMware =====
+
+:vmware
+chain --autofree https://boot.netboot.xyz/ipxe/vmware.ipxe ||
+goto custom_menu
+
+# ===== SystemRescue =====
+
+:systemrescue
+chain --autofree https://boot.netboot.xyz/ipxe/systemrescue.ipxe ||
+goto custom_menu
+
+# ===== Rescuezilla =====
+
+:rescuezilla
+chain --autofree https://boot.netboot.xyz/ipxe/rescuezilla.ipxe ||
+goto custom_menu
+
+# ===== GParted =====
 
 :gparted
 chain --autofree https://boot.netboot.xyz/ipxe/gparted.ipxe ||
-goto disktools
+goto custom_menu
+
+# ===== Clonezilla =====
 
 :clonezilla
 chain --autofree https://boot.netboot.xyz/ipxe/clonezilla.ipxe ||
-goto disktools
-
-:back
-chain --autofree https://boot.netboot.xyz ||
 goto custom_menu
 
-:exit_menu
+# ===== WinPE / Wimboot =====
+
+:wimboot
+iseq ${platform} pcbios && goto wimboot_bios ||
+echo Wimboot utilities require BIOS boot mode
+echo Current mode: ${platform}
+prompt Press any key to continue...
+goto custom_menu
+
+:wimboot_bios
+menu ${site_name} Wimboot / WinPE Utilities (BIOS)
+item winpe_utils          Windows PE Boot Utilities
+item memtest              Memtest86+
+item --key b back         Back to main menu
+choose selected || goto wimboot_bios
+goto ${selected}
+
+:winpe_utils
+chain --autofree https://boot.netboot.xyz/ipxe/utils-pcbios-64.ipxe ||
+goto wimboot_bios
+
+:memtest
+chain --autofree https://boot.netboot.xyz/ipxe/memtest.ipxe ||
+goto wimboot_bios
+
+# ===== Back handlers =====
+
+:back
+goto custom_menu
+
+:exit
 exit

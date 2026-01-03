@@ -1,0 +1,26 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Large binary files (use Git LFS or external storage instead)
+*.iso
+*.wim
+*.img
+*.vhd
+*.vhdx
+
+# Temporary files
+*.tmp
+*.bak
+
+# Secrets (if any)
+secrets/
+*.key
+*.pem

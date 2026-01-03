@@ -1,0 +1,39 @@
+#!ipxe
+# K3s Node Provisioning Menu
+# Zero-touch Ubuntu 24.04 installation with k3s agent join
+
+# Configuration
+set autoinstall_url http://tkn-b-haos.local:8080/autoinstall
+set local_assets http://tkn-b-haos.local:3000/assets
+
+# Menu
+menu K3s Node Provisioning
+item --gap --             -------- K3s Cluster Node Setup --------
+item k3s-node-auto        Install Ubuntu 24.04 + Join K3s (Autoinstall)
+item k3s-node-manual      Install Ubuntu 24.04 (Manual - No K3s)
+item --gap --             -------- Options --------
+item back                 Back to main menu
+choose selected || goto back
+
+:k3s-node-auto
+echo Starting Ubuntu 24.04 autoinstall for K3s node...
+echo Autoinstall config: ${autoinstall_url}
+kernel ${local_assets}/ubuntu-netboot-24.04-amd64/24.04.3-dac09526/vmlinuz
+initrd ${local_assets}/ubuntu-netboot-24.04-amd64/24.04.3-dac09526/initrd
+imgargs vmlinuz initrd=initrd ip=dhcp autoinstall ds=nocloud-net;s=${autoinstall_url}/
+boot || goto failed
+
+:k3s-node-manual
+echo Starting Ubuntu 24.04 manual installation...
+kernel ${local_assets}/ubuntu-netboot-24.04-amd64/24.04.3-dac09526/vmlinuz
+initrd ${local_assets}/ubuntu-netboot-24.04-amd64/24.04.3-dac09526/initrd
+imgargs vmlinuz initrd=initrd ip=dhcp
+boot || goto failed
+
+:failed
+echo Boot failed, returning to menu...
+sleep 5
+goto start
+
+:back
+chain ${boot_url}

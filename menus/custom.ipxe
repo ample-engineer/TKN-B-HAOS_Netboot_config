@@ -1,0 +1,103 @@
+#!ipxe
+#
+# TKN-B Custom Boot Menu
+#
+
+# Load local variables
+chain --autofree menus/local-vars.ipxe ||
+
+:custom_menu
+clear menu
+set space:hex 20:20
+set space ${space:string}
+menu ${site_name} Custom Boot Menu
+item --gap --             ------------------------- Local Options --------------------------
+item --key l local_linux  ${space} (L)ocal Linux Images
+item --key k k3s_provision ${space} (K)3s Node Provisioning
+item --key w local_win    ${space} (W)indows PE / Recovery
+item --gap --             ------------------------- Utilities -----------------------------
+item --key m memtest      ${space} (M)emtest86+
+item --key d disktools    ${space} (D)isk Tools (GParted, Clonezilla)
+item --gap --             ----------------------------------------------------------------
+item --key b back         ${space} (B)ack to netboot.xyz main menu
+item --key x exit_menu    ${space} E(x)it to local boot
+
+choose --timeout ${menu_timeout}000 --default local_linux selected || goto custom_menu
+goto ${selected}
+
+:local_linux
+menu ${site_name} Local Linux Images
+item ubuntu_live          Ubuntu 24.04 LTS Live
+item debian_live          Debian 12 Live
+item systemrescue         SystemRescue
+item --key b back_custom  Back to custom menu
+choose selected || goto local_linux
+goto ${selected}
+
+:ubuntu_live
+echo Booting Ubuntu 24.04 Live...
+chain --autofree https://boot.netboot.xyz/ipxe/ubuntu.ipxe ||
+goto local_linux
+
+:debian_live
+echo Booting Debian 12 Live...
+chain --autofree https://boot.netboot.xyz/ipxe/debian.ipxe ||
+goto local_linux
+
+:systemrescue
+echo Booting SystemRescue...
+chain --autofree https://boot.netboot.xyz/ipxe/systemrescue.ipxe ||
+goto local_linux
+
+:back_custom
+goto custom_menu
+
+:k3s_provision
+echo Loading K3s Node Provisioning Menu...
+chain --autofree k3s-provision.ipxe ||
+goto custom_menu
+
+:local_win
+iseq ${enable_windows_pe} 1 || goto win_disabled
+menu ${site_name} Windows PE / Recovery
+item winpe                Windows PE (local)
+item --key b back_custom  Back to custom menu
+choose selected || goto local_win
+goto ${selected}
+
+:winpe
+echo Windows PE not yet configured
+prompt Press any key to return...
+goto local_win
+
+:win_disabled
+echo Windows PE is disabled in local-vars.ipxe
+prompt Press any key to continue...
+goto custom_menu
+
+:memtest
+chain --autofree https://boot.netboot.xyz/ipxe/memtest.ipxe ||
+goto custom_menu
+
+:disktools
+menu Disk Tools
+item gparted              GParted Live
+item clonezilla           Clonezilla Live
+item --key b back_custom  Back to custom menu
+choose selected || goto disktools
+goto ${selected}
+
+:gparted
+chain --autofree https://boot.netboot.xyz/ipxe/gparted.ipxe ||
+goto disktools
+
+:clonezilla
+chain --autofree https://boot.netboot.xyz/ipxe/clonezilla.ipxe ||
+goto disktools
+
+:back
+chain --autofree https://boot.netboot.xyz ||
+goto custom_menu
+
+:exit_menu
+exit

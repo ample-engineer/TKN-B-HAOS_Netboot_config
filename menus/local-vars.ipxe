@@ -1,0 +1,24 @@
+#!ipxe
+#
+# Local Variables - Site-specific settings
+#
+
+# Network Configuration
+set local_server 10.0.1.188
+set nas_server 10.0.2.111
+
+# Paths
+set local_assets http://${local_server}:8080/assets
+set nfs_path /mnt/netboot
+
+# Site Info
+set site_name TKN-B
+set menu_timeout 30
+
+# Feature Flags (1=enabled, 0=disabled)
+set enable_local_images 1
+set enable_windows_pe 0
+set enable_custom_linux 1
+
+# K3s Provisioning
+set k3s_autoinstall_url http://${local_server}:8080/autoinstall

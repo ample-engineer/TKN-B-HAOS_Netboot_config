@@ -1,0 +1,4 @@
+# Cloud-init meta-data
+# This file can be empty but must exist for autoinstall
+instance-id: k3s-node-pxe
+local-hostname: k3s-node

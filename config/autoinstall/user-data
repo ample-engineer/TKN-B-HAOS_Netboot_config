@@ -1,0 +1,164 @@
+#cloud-config
+autoinstall:
+  version: 1
+
+  # Locale and keyboard
+  locale: en_GB.UTF-8
+  keyboard:
+    layout: gb
+
+  # Network - DHCP
+  network:
+    version: 2
+    ethernets:
+      id0:
+        match:
+          driver: "*"
+        dhcp4: true
+        dhcp6: false
+
+  # Storage - use entire disk, LVM
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+
+  # User account
+  identity:
+    hostname: k3s-node
+    username: k3sadmin
+    # Password hash for 'changeme' - CHANGE THIS or use SSH keys only
+    # Generate new hash with: mkpasswd -m sha-512
+    password: "$6$rounds=4096$xyz$LJLf3S6/bFv.3hCNRgLvJl/9MhZz5UFMRMhCdOLHWxZ5tqGJMrPCK8nChB1.pOrFPLnOSTBYHJMLT5iVOXTw3/"
+
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys:
+      # Add your SSH public key(s) here for passwordless access
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC5Xfj+dptG0bXa4j00bY3xKZov853FSUkGwwHfVj953 sbarker@Mac.internal.thomker.net"
+
+  # Minimal package selection
+  packages:
+    - curl
+    - open-iscsi
+    - nfs-common
+    - net-tools
+    - htop
+    - jq
+
+  # Disable automatic updates during install
+  updates: security
+
+  # Late commands - run after installation, before first boot
+  late-commands:
+    # Set hostname based on MAC address (makes each node unique)
+    - curtin in-target --target=/target -- bash -c 'MAC=$(cat /sys/class/net/$(ip route show default | awk "/default/ {print \$5}" | head -1)/address | tr -d ":" | tail -c 5); hostnamectl set-hostname "k3s-node-${MAC}"'
+
+    # Create k3s auto-join script that runs on first boot
+    - |
+      cat > /target/usr/local/bin/k3s-auto-join.sh << 'SCRIPT'
+      #!/bin/bash
+      set -e
+
+      LOG_FILE="/var/log/k3s-join.log"
+      exec > >(tee -a "$LOG_FILE") 2>&1
+      echo "$(date): Starting k3s auto-join process..."
+
+      # Configuration
+      K3S_TOKEN="thomker-k3s-cluster-token-2024"
+      K3S_SERVER_PORT="6443"
+      K3S_DISCOVERY_TIMEOUT=30
+
+      # Try to discover existing k3s server on the network
+      discover_server() {
+        echo "Searching for existing k3s server..."
+
+        # Check common server IPs (adjust for your network)
+        for ip in $(ip route | grep -oP 'src \K[\d.]+' | head -1 | sed 's/\.[0-9]*$/./'){{1..254}}; do
+          if timeout 1 bash -c "echo >/dev/tcp/$ip/$K3S_SERVER_PORT" 2>/dev/null; then
+            echo "Found k3s server at: $ip"
+            echo "$ip"
+            return 0
+          fi
+        done
+
+        # Alternative: check via DNS if configured
+        if host k3s-server.local >/dev/null 2>&1; then
+          SERVER_IP=$(host k3s-server.local | awk '/has address/ {print $4}')
+          echo "Found k3s server via DNS: $SERVER_IP"
+          echo "$SERVER_IP"
+          return 0
+        fi
+
+        return 1
+      }
+
+      # Check if k3s is already installed
+      if [ -f /var/lib/rancher/k3s/agent/kubelet.kubeconfig ] || [ -f /var/lib/rancher/k3s/server/node-token ]; then
+        echo "K3s already installed, skipping..."
+        exit 0
+      fi
+
+      # Try to find existing server
+      SERVER_IP=$(discover_server || echo "")
+
+      if [ -n "$SERVER_IP" ]; then
+        # Join as agent
+        echo "$(date): Joining k3s cluster as AGENT..."
+        echo "Server: https://${SERVER_IP}:${K3S_SERVER_PORT}"
+
+        curl -sfL https://get.k3s.io | K3S_URL="https://${SERVER_IP}:${K3S_SERVER_PORT}" \
+          K3S_TOKEN="${K3S_TOKEN}" \
+          sh -s - agent \
+          --node-label="node-role.kubernetes.io/worker=true" \
+          --node-label="provisioned-by=netboot-xyz"
+
+        echo "$(date): Successfully joined as agent!"
+      else
+        # Become the server (first node)
+        echo "$(date): No existing server found. Installing as SERVER..."
+
+        curl -sfL https://get.k3s.io | K3S_TOKEN="${K3S_TOKEN}" \
+          sh -s - server \
+          --cluster-init \
+          --node-label="node-role.kubernetes.io/master=true" \
+          --node-label="provisioned-by=netboot-xyz"
+
+        echo "$(date): Server installation complete!"
+        echo "Token for joining agents: ${K3S_TOKEN}"
+        echo "Server URL: https://$(hostname -I | awk '{print $1}'):6443"
+      fi
+
+      # Disable this service after successful setup
+      systemctl disable k3s-auto-join.service
+      echo "$(date): K3s setup complete!"
+      SCRIPT
+
+    - curtin in-target --target=/target -- chmod +x /usr/local/bin/k3s-auto-join.sh
+
+    # Create systemd service for first-boot k3s setup
+    - |
+      cat > /target/etc/systemd/system/k3s-auto-join.service << 'EOF'
+      [Unit]
+      Description=Auto-join or create k3s cluster on first boot
+      After=network-online.target
+      Wants=network-online.target
+      ConditionPathExists=!/var/lib/rancher/k3s
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStartPre=/bin/sleep 30
+      ExecStart=/usr/local/bin/k3s-auto-join.sh
+      TimeoutStartSec=600
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+    - curtin in-target --target=/target -- systemctl enable k3s-auto-join.service
+
+  # Reboot after installation
+  shutdown: reboot

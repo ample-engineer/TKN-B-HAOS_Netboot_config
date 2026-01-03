@@ -33,7 +33,7 @@ item --key i wimboot      ${space} W(i)mboot / WinPE Utils
 item --gap --             --------
 item --key x exit         ${space} E(x)it to local boot
 
-choose --timeout 60000 --default ubuntu selected || goto custom_menu
+choose --timeout 10000 --default ubuntu selected || goto custom_menu
 goto ${selected}
 
 # ===== Cluster Provisioning =====

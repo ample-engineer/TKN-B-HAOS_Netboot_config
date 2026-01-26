@@ -1,0 +1,58 @@
+#cloud-config
+autoinstall:
+  version: 1
+  
+  # Locale and keyboard
+  locale: en_GB.UTF-8
+  keyboard:
+    layout: gb
+  
+  # Network - DHCP
+  network:
+    version: 2
+    ethernets:
+      id0:
+        match:
+          driver: "*"
+        dhcp4: true
+        dhcp-identifier: mac
+  
+  # Use entire disk, no LVM
+  storage:
+    layout:
+      name: direct
+  
+  # Identity - automated
+  identity:
+    hostname: ubuntu-server
+    username: deploy
+    # Password: Deploy123!
+    password: "$6$PMc/fkkzUyq5Yvnm$oj8kwzfIlZieSjurjFxwargx04/CqdhnXv8oij50eI5nR8eTBWszKQ5eyNFsyEjEny4hKpXi7/zvWo2b/2plj."
+  
+  # SSH - enabled with password auth
+  ssh:
+    install-server: true
+    allow-pw: true
+  
+  # Packages
+  packages:
+    - curl
+    - wget
+    - vim
+    - htop
+    - net-tools
+    - git
+    - tmux
+    - unzip
+  
+  # Late commands - set hostname and configure
+  late-commands:
+    # Set hostname from kernel param if provided
+    - sh -c 'CUSTOM_HOSTNAME=$(cat /proc/cmdline | sed -n "s/.*hostname=\\([^ ]*\\).*/\\1/p"); if [ -n "$CUSTOM_HOSTNAME" ]; then echo "$CUSTOM_HOSTNAME" > /target/etc/hostname; sed -i "s/127.0.1.1.*/127.0.1.1 $CUSTOM_HOSTNAME/" /target/etc/hosts || echo "127.0.1.1 $CUSTOM_HOSTNAME" >> /target/etc/hosts; fi'
+    # Enable password SSH
+    - curtin in-target -- sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    # Set timezone
+    - curtin in-target -- timedatectl set-timezone Europe/London
+    # Passwordless sudo for deploy user
+    - echo "deploy ALL=(ALL) NOPASSWD:ALL" > /target/etc/sudoers.d/deploy
+    - chmod 440 /target/etc/sudoers.d/deploy

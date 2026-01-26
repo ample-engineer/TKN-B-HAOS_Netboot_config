@@ -1,62 +1,39 @@
 #!ipxe
 #
 # Local Variables - Site-specific settings
-# TKN-B netboot.xyz configuration
+# TKN netboot.xyz configuration (Unraid)
 #
 
 # ===== Network Configuration =====
-set local_server 10.0.1.188
+set local_server 10.0.2.111
 set nas_server 10.0.2.111
 set gateway 10.0.0.1
 
 # ===== Local Asset Caching =====
-# Use local assets when available (faster, no internet dependency)
-# Assets are served from the netboot.xyz addon on port 3000/8080
-set local_assets http://${local_server}:3000/assets
-set local_menus http://${local_server}:8080
+# Assets served from netboot.xyz addon
+# Web UI: port 3001, Assets: port 8086
+set local_assets http://${local_server}:8086
+set local_menus http://${local_server}:3001
 
 # Enable local caching (1=use local first, 0=use remote)
 set use_local_cache 1
 
 # ===== Provisioning Server =====
 # Config server for autoinstall/cloud-init
-set provision_server http://${local_server}:8080
+set provision_server http://${local_server}:8086
 
 # ===== Site Info =====
-set site_name TKN-B
+set site_name TKN
 set menu_timeout 60
 
 # ===== Feature Flags =====
-# 1=enabled, 0=disabled
 set enable_local_images 1
 set enable_windows_pe 0
 set enable_custom_linux 1
-set enable_cluster_provisioning 1
+set enable_cluster_provisioning 0
 
-# ===== K3s Configuration =====
-set k3s_autoinstall_url ${provision_server}/autoinstall
-
-# ===== BriefHours Configuration =====
-set briefhours_autoinstall_url ${provision_server}/briefhours
-
-# ===== Cached Ubuntu Assets =====
-# These are pulled locally via the netboot.xyz web UI
-# Path: Assets > Pull OS > Ubuntu > 24.04
-set ubuntu_kernel ${local_assets}/ubuntu-netboot-24.04-amd64/vmlinuz
-set ubuntu_initrd ${local_assets}/ubuntu-netboot-24.04-amd64/initrd
+# ===== Ubuntu Autoinstall =====
+set ubuntu_autoinstall_url ${provision_server}/ubuntu-autoinstall/
 
 # ===== Remote Fallback =====
-# Used when local assets not available
 set remote_boot https://boot.netboot.xyz
-
-# ===== VLAN-Based Auto-Routing =====
-# Route clients to auto-provisioning based on subnet
-# VLAN 11 (10.0.11.x) -> Zero-touch K3s provisioning
-# Skip if already handled (prevents loop)
-isset ${vlan_routed} && goto :eof ||
-set vlan_routed 1
-
-# VLAN 11: K3s Nodes - Zero-touch auto-provision
-iseq ${net0/ip:ipv4} 10.0.11.* && chain --autofree k3s-auto.ipxe ||
-
-# All other VLANs continue to normal menu

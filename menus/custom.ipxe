@@ -1,6 +1,6 @@
 #!ipxe
 #
-# TKN-B Custom Boot Menu
+# TKN Custom Boot Menu
 # Curated selection of boot options
 #
 
@@ -13,9 +13,9 @@ set space:hex 20:20
 set space ${space:string}
 
 menu ${site_name} Network Boot Menu
-item --gap --             -------- Cluster Provisioning --------
-item --key b briefhours   ${space} (B)riefHours PostgreSQL Cluster
-item --key k k3s          ${space} (K)3s Kubernetes Cluster
+item --gap --             -------- Automated Installs --------
+item ubuntu-auto          ${space} Ubuntu 24.04 LTS Server (Auto - default hostname)
+item ubuntu-auto-prompt   ${space} Ubuntu 24.04 LTS Server (Enter Hostname)
 item --gap --             -------- Operating Systems --------
 item --key u ubuntu       ${space} (U)buntu (Desktop & Server)
 item --key w windows      ${space} (W)indows
@@ -23,32 +23,45 @@ item --key r rhel         ${space} (R)HEL / Rocky / Alma
 item --key a arch         ${space} (A)rch Linux
 item --key m mint         ${space} Linux (M)int
 item --key l kali         ${space} Ka(l)i Linux
-item --key v vmware       ${space} (V)Mware ESXi
 item --gap --             -------- Recovery & Utilities --------
 item --key s systemrescue ${space} (S)ystemRescue
 item --key z rescuezilla  ${space} Rescuezilla
 item --key g gparted      ${space} (G)Parted
 item --key c clonezilla   ${space} (C)lonezilla
-item --key i wimboot      ${space} W(i)mboot / WinPE Utils
 item --gap --             --------
 item --key x exit         ${space} E(x)it to local boot
 
 choose --timeout 10000 --default ubuntu selected || goto custom_menu
 goto ${selected}
 
-# ===== Cluster Provisioning =====
+# ===== Ubuntu Automated Install =====
 
-:briefhours
-echo Loading BriefHours Cluster Provisioning...
-chain --autofree briefhours.ipxe ||
-goto custom_menu
+:ubuntu-auto
+set custom_hostname ubuntu-server
+goto ubuntu-boot-auto
 
-:k3s
-echo Loading K3s Node Provisioning...
-chain --autofree k3s-provision.ipxe ||
-goto custom_menu
+:ubuntu-auto-prompt
+echo -n Enter hostname for new server: ${} && read custom_hostname
+iseq ${custom_hostname} ${} && set custom_hostname ubuntu-server ||
+goto ubuntu-boot-auto
 
-# ===== Ubuntu =====
+:ubuntu-boot-auto
+echo
+echo ==========================================
+echo  Deploying Ubuntu 24.04 LTS Server
+echo  Hostname: ${custom_hostname}
+echo  User: deploy / Password: Deploy123!
+echo ==========================================
+echo
+echo Loading installer...
+set kernel_url https://github.com/netbootxyz/ubuntu-squash/releases/download/24.04.3-717d3a1a/
+set ubuntu_iso_url http://releases.ubuntu.com/noble/ubuntu-24.04.3-live-server-amd64.iso
+imgfree
+kernel ${kernel_url}vmlinuz root=/dev/ram0 ramdisk_size=3500000 ip=dhcp url=${ubuntu_iso_url} autoinstall ds=nocloud-net;s=${ubuntu_autoinstall_url} hostname=${custom_hostname} initrd=initrd.magic
+initrd ${kernel_url}initrd
+boot
+
+# ===== Ubuntu Manual =====
 
 :ubuntu
 menu ${site_name} Ubuntu
@@ -82,17 +95,11 @@ goto custom_menu
 
 :rhel
 menu ${site_name} RHEL / Enterprise Linux
-item rhel_main            Red Hat Enterprise Linux
 item rocky                Rocky Linux
 item alma                 AlmaLinux
-item oracle               Oracle Linux
 item --key b back         Back to main menu
 choose selected || goto rhel
 goto ${selected}
-
-:rhel_main
-chain --autofree https://boot.netboot.xyz/ipxe/rhel.ipxe ||
-goto rhel
 
 :rocky
 chain --autofree https://boot.netboot.xyz/ipxe/rockylinux.ipxe ||
@@ -102,84 +109,39 @@ goto rhel
 chain --autofree https://boot.netboot.xyz/ipxe/almalinux.ipxe ||
 goto rhel
 
-:oracle
-chain --autofree https://boot.netboot.xyz/ipxe/oracle.ipxe ||
-goto rhel
-
-# ===== Arch =====
+# ===== Other Distros =====
 
 :arch
 chain --autofree https://boot.netboot.xyz/ipxe/archlinux.ipxe ||
 goto custom_menu
 
-# ===== Mint =====
-
 :mint
 chain --autofree https://boot.netboot.xyz/ipxe/live-mint.ipxe ||
 goto custom_menu
-
-# ===== Kali =====
 
 :kali
 chain --autofree https://boot.netboot.xyz/ipxe/kali.ipxe ||
 goto custom_menu
 
-# ===== VMware =====
-
-:vmware
-chain --autofree https://boot.netboot.xyz/ipxe/vmware.ipxe ||
-goto custom_menu
-
-# ===== SystemRescue =====
+# ===== Utilities =====
 
 :systemrescue
 chain --autofree https://boot.netboot.xyz/ipxe/systemrescue.ipxe ||
 goto custom_menu
 
-# ===== Rescuezilla =====
-
 :rescuezilla
 chain --autofree https://boot.netboot.xyz/ipxe/rescuezilla.ipxe ||
 goto custom_menu
-
-# ===== GParted =====
 
 :gparted
 chain --autofree https://boot.netboot.xyz/ipxe/gparted.ipxe ||
 goto custom_menu
 
-# ===== Clonezilla =====
-
 :clonezilla
 chain --autofree https://boot.netboot.xyz/ipxe/clonezilla.ipxe ||
 goto custom_menu
 
-# ===== WinPE / Wimboot =====
-
-:wimboot
-iseq ${platform} pcbios && goto wimboot_bios ||
-echo Wimboot utilities require BIOS boot mode
-echo Current mode: ${platform}
-prompt Press any key to continue...
-goto custom_menu
-
-:wimboot_bios
-menu ${site_name} Wimboot / WinPE Utilities (BIOS)
-item winpe_utils          Windows PE Boot Utilities
-item memtest              Memtest86+
-item --key b back         Back to main menu
-choose selected || goto wimboot_bios
-goto ${selected}
-
-:winpe_utils
-chain --autofree https://boot.netboot.xyz/ipxe/utils-pcbios-64.ipxe ||
-goto wimboot_bios
-
-:memtest
-chain --autofree https://boot.netboot.xyz/ipxe/memtest.ipxe ||
-goto wimboot_bios
-
-# ===== Back handlers =====
+# ===== Back/Exit =====
 
 :back
 goto custom_menu
